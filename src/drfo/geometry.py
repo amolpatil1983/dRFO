@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 BOHR_PER_ANGSTROM = 1.8897259886
+AMU_PER_ELECTRON_MASS = 1822.888486209  # atomic mass unit, in atomic units (m_e = 1)
 
 
 @dataclass

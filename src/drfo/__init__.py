@@ -12,6 +12,7 @@ from .internal import (
 from .driver import Status, TSResult, find_ts
 from .hessian.schlegel_prep import TSPreparation, build_schlegel_ts_preparation
 from .interpolation import GuessResult, build_ts_guess
+from .irc import IRCBranchResult, IRCResult, TSVerification, run_irc, verify_ts
 from .optimize.search import run_drfo_search
 
 __all__ = [
@@ -36,4 +37,9 @@ __all__ = [
     "TSPreparation",
     "build_schlegel_ts_preparation",
     "run_drfo_search",
+    "IRCBranchResult",
+    "IRCResult",
+    "TSVerification",
+    "run_irc",
+    "verify_ts",
 ]

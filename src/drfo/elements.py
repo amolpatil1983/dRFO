@@ -53,6 +53,22 @@ _REFERENCE_BOND_LENGTHS: dict[tuple[str, str], float] = {
 }
 
 
+# IUPAC standard atomic weights (amu), same element subset as the covalent
+# radii table above.
+_ATOMIC_MASS_AMU: dict[str, float] = {
+    "H": 1.008, "He": 4.0026,
+    "Li": 6.94, "Be": 9.0122, "B": 10.81, "C": 12.011, "N": 14.007, "O": 15.999, "F": 18.998, "Ne": 20.180,
+    "Na": 22.990, "Mg": 24.305, "Al": 26.982, "Si": 28.085, "P": 30.974, "S": 32.06, "Cl": 35.45, "Ar": 39.948,
+    "K": 39.098, "Ca": 40.078,
+    "Br": 79.904, "I": 126.90,
+}
+
+
+def atomic_mass_amu(symbol: str) -> float:
+    """Standard atomic weight in amu. Raises KeyError for unsupported elements."""
+    return _ATOMIC_MASS_AMU[symbol]
+
+
 def covalent_radius(symbol: str) -> float:
     """Covalent radius in bohr. Raises KeyError for unsupported elements."""
     return COVALENT_RADII[symbol]
