@@ -33,8 +33,8 @@ from .trust import ConvergenceCriteria
 logger = logging.getLogger(__name__)
 
 Status = Literal[
-    "converged", "max_iter", "calculator_failure", "scf_convergence_failure",
-    "backtransform_failure", "no_progress",
+    "converged", "wrong_stationary_type", "max_iter", "calculator_failure",
+    "scf_convergence_failure", "backtransform_failure", "no_progress",
 ]
 
 
@@ -59,6 +59,19 @@ def log_calculator_error(context: str, exc: CalculatorError) -> Status:
 
 @dataclass
 class TSResult:
+    """`converged` (and `status == "converged"`) means the search reached a
+    gradient-converged stationary point THAT IS a genuine first-order
+    saddle point (`n_imaginary == 1`) -- not merely "the gradient went to
+    zero somewhere." A search can gradient-converge to a minimum instead
+    (e.g. when the guide vector doesn't capture a reaction's real
+    curvature, such as an electrocyclic ring closure needing a rotational
+    component Delta-b can't express) -- that case is reported as
+    `status == "wrong_stationary_type"` with `converged = False`, so a
+    caller checking only `if result.converged` is not misled into treating
+    a minimum (or a higher-order saddle) as a valid TS. `n_imaginary`
+    itself is still populated in that case, for callers who want to
+    distinguish "found a minimum" (0) from "found a higher-order saddle"
+    (>1)."""
     geometry: Geometry
     energy: float
     gradient_rms: float
@@ -186,6 +199,12 @@ def run_drfo_search(
             hessian = calculator.hessian(geom)
             eigvals = np.linalg.eigvalsh(hessian)
             n_imaginary = int(np.sum(eigvals < -imaginary_mode_tol))
+            if status == "converged" and n_imaginary != 1:
+                # Gradient-converged, but not to a first-order saddle --
+                # see TSResult's docstring for why this must not be
+                # reported as a plain "converged" success.
+                converged = False
+                status = "wrong_stationary_type"
     except CalculatorError as exc:
         final_status = log_calculator_error("calculator failure during final characterization", exc)
         if status == "converged":
