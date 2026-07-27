@@ -1,0 +1,5 @@
+3
+HNC, xtb --opt tight (GFN2-xTB), atom order H,C,N kept consistent with hcn.xyz
+H   0.00000000   0.00000000   2.15609307
+C   0.00000000   0.00000000   0.00000000
+N   0.00000000   0.00000000   1.15842876

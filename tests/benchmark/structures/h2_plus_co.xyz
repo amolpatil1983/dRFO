@@ -1,0 +1,6 @@
+4
+H2 + CO, each xtb --opt tight (GFN2-xTB), placed 6 A apart. Atom order C,O,H,H kept consistent with h2co.xyz
+C 0.0 0.0 0.00124715568705
+O 0.0 0.0 1.12875284431295
+H 6.0 0.0 -0.01848467372883
+H 6.0 0.0 0.75848467372883
