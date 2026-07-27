@@ -140,7 +140,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from drfo import Geometry, XTBCalculator, find_ts
+from drfo import Geometry, XTBCalculator, build_ts_guess, find_ts
 from drfo.io.xyz import read_xyz
 
 XTB_PATH = "/home/jason/xtb-6.6.1/bin/xtb"
@@ -220,6 +220,41 @@ def test_hcn_hnc_with_exact_pre_relaxation_hessian(tmp_path):
     assert result.status == "converged"
     assert result.converged
     assert result.n_imaginary == 1
+
+
+def test_hcn_hnc_with_externally_supplied_guess_geometry(tmp_path):
+    """Regression check for `guess_geometry`'s wiring: an externally-built
+    starting geometry (here, just a guess built the normal way and fed
+    back in, to isolate the plumbing from any particular external guess
+    source) should skip build_ts_guess entirely and still reach the same
+    converged TS via the unchanged downstream pipeline (pre-relaxation,
+    Delta-b, initial Hessian, dRFO search). This is the integration point
+    for e.g. an RDKit distance-geometry-embedded guess."""
+    hcn = read_xyz(STRUCTURES_DIR / "hcn.xyz")
+    hnc = read_xyz(STRUCTURES_DIR / "hnc.xyz")
+    cheap = XTBCalculator(XTB_PATH, method="gfnff", scratch_dir=tmp_path)
+    calc = XTBCalculator(XTB_PATH, method="gfn2", scratch_dir=tmp_path)
+
+    guess = build_ts_guess(hcn, hnc, cheap)
+
+    result = find_ts(
+        hcn, hnc, calculator=calc, max_relax_steps=80, max_ts_steps=80,
+        guess_geometry=guess.geometry,
+        breaking_bonds=guess.breaking_bonds, forming_bonds=guess.forming_bonds,
+    )
+
+    assert result.status == "converged"
+    assert result.converged
+    assert result.n_imaginary == 1
+
+
+def test_guess_geometry_requires_explicit_bonds(tmp_path):
+    hcn = read_xyz(STRUCTURES_DIR / "hcn.xyz")
+    hnc = read_xyz(STRUCTURES_DIR / "hnc.xyz")
+    calc = XTBCalculator(XTB_PATH, method="gfn2", scratch_dir=tmp_path)
+
+    with pytest.raises(ValueError):
+        find_ts(hcn, hnc, calculator=calc, guess_geometry=hcn)
 
 
 def test_hcn_hnc_forward_and_reverse_agree_on_ts_energy(tmp_path):

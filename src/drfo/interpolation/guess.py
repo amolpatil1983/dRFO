@@ -120,14 +120,19 @@ def _walk_to_goal_lengths(
     return current
 
 
-def build_ts_guess(
-    reactant: Geometry, product: Geometry, cheap_calc: Calculator, *,
-    bond_scale: float = 1.4, max_internal_step_bohr: float = 0.5,
-    clamp_factor: float = 2.0, b_param: float = 2.0,
+def build_reaction_coordinate_system(
+    reactant: Geometry, product: Geometry, *,
+    bond_scale: float = 1.4,
     breaking_bonds: list[tuple[int, int]] | None = None,
     forming_bonds: list[tuple[int, int]] | None = None,
-) -> GuessResult:
-    """Build a TS guess from `reactant`/`product`.
+) -> tuple[InternalCoordinateSystem, set[tuple[int, int]], set[tuple[int, int]]]:
+    """Build the redundant internal coordinate system spanning `reactant`
+    and `product`, plus the breaking/forming bond classification it was
+    built from. Factored out of `build_ts_guess` so any guess-building
+    strategy -- not just this module's own bond-order interpolation --
+    can get the same coordinate system/active-bond classification without
+    duplicating this logic (e.g. an externally-built guess geometry passed
+    to `hessian.schlegel_prep.build_schlegel_ts_preparation`).
 
     By default, breaking/forming bonds are derived from a covalent-radius
     distance cutoff (`bond_scale`) on each endpoint independently, diffed
@@ -168,6 +173,26 @@ def build_ts_guess(
         raise ValueError("reactant and product have identical bonding; no reaction coordinate")
 
     ics = build_coordinate_system(merged, reactant, product)
+    return ics, breaking, forming
+
+
+def build_ts_guess(
+    reactant: Geometry, product: Geometry, cheap_calc: Calculator, *,
+    bond_scale: float = 1.4, max_internal_step_bohr: float = 0.5,
+    clamp_factor: float = 2.0, b_param: float = 2.0,
+    breaking_bonds: list[tuple[int, int]] | None = None,
+    forming_bonds: list[tuple[int, int]] | None = None,
+) -> GuessResult:
+    """Build a TS guess from `reactant`/`product` via bond-order
+    interpolation with relaxation -- see `build_reaction_coordinate_system`
+    for the `breaking_bonds`/`forming_bonds` override semantics shared
+    with it.
+    """
+    ics, breaking, forming = build_reaction_coordinate_system(
+        reactant, product, bond_scale=bond_scale,
+        breaking_bonds=breaking_bonds, forming_bonds=forming_bonds,
+    )
+    active_bonds = breaking | forming
     active_indices = _active_stretch_indices(ics, active_bonds)
 
     goal_length: dict[tuple[int, int], float] = {}

@@ -36,6 +36,7 @@ def find_ts(
     breaking_bonds: list[tuple[int, int]] | None = None,
     forming_bonds: list[tuple[int, int]] | None = None,
     use_exact_pre_relaxation_hessian: bool = False,
+    guess_geometry: Geometry | None = None,
 ) -> TSResult:
     """Locate the transition state connecting `reactant` and `product`
     using the Connectivity Transition State (CTS) method: bond-order
@@ -83,6 +84,15 @@ def find_ts(
     `use_exact_pre_relaxation_hessian` (default off): also passed straight
     through to `build_schlegel_ts_preparation` -- see its docstring for
     what it does and why it isn't on by default.
+
+    `guess_geometry`: also passed straight through to
+    `build_schlegel_ts_preparation` -- supply an already-built starting
+    geometry from any source (RDKit distance-geometry embedding, an
+    ML-predicted TS, ...) to skip this function's own bond-order-
+    interpolation guess-building entirely, while still getting the rest of
+    the CTS pipeline (pre-relaxation, Delta-b, initial Hessian, dRFO
+    search) unchanged. Requires `breaking_bonds`/`forming_bonds` when used
+    -- see `build_schlegel_ts_preparation`'s docstring.
     """
     try:
         prep = build_schlegel_ts_preparation(
@@ -91,6 +101,7 @@ def find_ts(
             keep_trajectory=keep_trajectory,
             breaking_bonds=breaking_bonds, forming_bonds=forming_bonds,
             use_exact_pre_relaxation_hessian=use_exact_pre_relaxation_hessian,
+            guess_geometry=guess_geometry,
         )
     except CalculatorError as exc:
         # Already logged inside build_schlegel_ts_preparation -- just

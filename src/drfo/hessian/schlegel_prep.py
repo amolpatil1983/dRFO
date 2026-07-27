@@ -22,7 +22,7 @@ from ..calculators.xtb import XTBCalculator
 from ..geometry import Geometry
 from ..internal.coordinates import Bend, InternalCoordinateSystem, Stretch
 from ..internal.transform import b_pinv
-from ..interpolation.guess import build_ts_guess
+from ..interpolation.guess import build_reaction_coordinate_system, build_ts_guess
 from ..optimize.minimizer import constrained_relax
 from ..optimize.search import log_calculator_error
 from ..optimize.trust import ConvergenceCriteria
@@ -75,6 +75,7 @@ def build_schlegel_ts_preparation(
     breaking_bonds: list[tuple[int, int]] | None = None,
     forming_bonds: list[tuple[int, int]] | None = None,
     use_exact_pre_relaxation_hessian: bool = False,
+    guess_geometry: Geometry | None = None,
 ) -> TSPreparation:
     """Build everything `optimize.search.run_drfo_search` needs from a
     reactant/product pair, per the paper's CTS recipe: bond-order
@@ -87,7 +88,20 @@ def build_schlegel_ts_preparation(
     through to `build_ts_guess` to bypass its default covalent-radius
     distance-cutoff diffing -- use this when a more reliable classification
     is already available (e.g. from an exact atom-mapping step run
-    upstream). Both must be given together, or neither.
+    upstream). Both must be given together, or neither. Required (both)
+    when `guess_geometry` is also given -- see below.
+
+    `guess_geometry`: an already-built starting geometry from any source
+    (an RDKit distance-geometry embedding, an ML-predicted TS, a hand-
+    built structure, ...), skipping this function's own `build_ts_guess`
+    call (and its cheap-calculator relaxation walk) entirely. Everything
+    downstream -- the coordinate system, constrained pre-relaxation on the
+    real calculator, Delta-b, and the eq. 12 initial Hessian -- is built
+    exactly as it would be otherwise, just starting from this geometry
+    instead of the bond-order-interpolation guess. `breaking_bonds`/
+    `forming_bonds` must both be supplied alongside it (there's no
+    `build_ts_guess` call left to derive them from). `cheap_calculator` is
+    unused in this path (nothing left that needs a cheap potential).
 
     `use_exact_pre_relaxation_hessian` (default off): the Hessian eq. 12's
     Rayleigh-flip is built from is normally the BFGS-accumulated Hessian
@@ -120,36 +134,46 @@ def build_schlegel_ts_preparation(
         raise ValueError("reactant and product must have matching charge/spin")
 
     crit = convergence or ConvergenceCriteria()
-    if cheap_calculator is None:
-        if not isinstance(calculator, XTBCalculator):
-            raise ValueError("cheap_calculator must be supplied explicitly when calculator "
-                              "is not an XTBCalculator (no default cheap potential available)")
-        cheap_calculator = XTBCalculator(
-            calculator.xtb_path, method="gfnff", charge=calculator.charge,
-            spin=calculator.spin, scratch_dir=calculator.scratch_dir,
-        )
 
-    try:
-        guess = build_ts_guess(
-            reactant, product, cheap_calculator, bond_scale=bond_scale,
+    if guess_geometry is not None:
+        if breaking_bonds is None or forming_bonds is None:
+            raise ValueError("breaking_bonds and forming_bonds must be supplied together with guess_geometry")
+        ics, breaking, forming = build_reaction_coordinate_system(
+            reactant, product, bond_scale=bond_scale,
             breaking_bonds=breaking_bonds, forming_bonds=forming_bonds,
         )
-    except CalculatorError as exc:
-        log_calculator_error("cheap-calculator failure during guess building", exc)
-        raise
+        guess_geom = guess_geometry
+    else:
+        if cheap_calculator is None:
+            if not isinstance(calculator, XTBCalculator):
+                raise ValueError("cheap_calculator must be supplied explicitly when calculator "
+                                  "is not an XTBCalculator (no default cheap potential available)")
+            cheap_calculator = XTBCalculator(
+                calculator.xtb_path, method="gfnff", charge=calculator.charge,
+                spin=calculator.spin, scratch_dir=calculator.scratch_dir,
+            )
+        try:
+            guess = build_ts_guess(
+                reactant, product, cheap_calculator, bond_scale=bond_scale,
+                breaking_bonds=breaking_bonds, forming_bonds=forming_bonds,
+            )
+        except CalculatorError as exc:
+            log_calculator_error("cheap-calculator failure during guess building", exc)
+            raise
+        ics = guess.coord_system
+        breaking = set(guess.breaking_bonds)
+        forming = set(guess.forming_bonds)
+        guess_geom = guess.geometry
 
-    ics = guess.coord_system
-    breaking = set(guess.breaking_bonds)
-    forming = set(guess.forming_bonds)
     active_bonds = breaking | forming
     frozen_indices = _frozen_indices_for_relaxation(ics, active_bonds)
-    delta_b_raw = delta_b_vector(ics, guess.breaking_bonds, guess.forming_bonds)
+    delta_b_raw = delta_b_vector(ics, sorted(breaking), sorted(forming))
 
-    trajectory: list[Geometry] = [guess.geometry.copy()] if keep_trajectory else []
+    trajectory: list[Geometry] = [guess_geom.copy()] if keep_trajectory else []
 
     try:
         relax_result = constrained_relax(
-            guess.geometry, ics, frozen_indices, calculator,
+            guess_geom, ics, frozen_indices, calculator,
             max_steps=max_relax_steps, rms_grad_threshold=crit.rms_grad,
             return_hessian=True,
         )
