@@ -35,6 +35,7 @@ def find_ts(
     hessian_refresh_interval: int | None = None,
     breaking_bonds: list[tuple[int, int]] | None = None,
     forming_bonds: list[tuple[int, int]] | None = None,
+    use_exact_pre_relaxation_hessian: bool = False,
 ) -> TSResult:
     """Locate the transition state connecting `reactant` and `product`
     using the Connectivity Transition State (CTS) method: bond-order
@@ -78,6 +79,10 @@ def find_ts(
     classification passed straight through to
     `hessian.schlegel_prep.build_schlegel_ts_preparation`, bypassing its
     default covalent-radius diffing -- see that function's docstring.
+
+    `use_exact_pre_relaxation_hessian` (default off): also passed straight
+    through to `build_schlegel_ts_preparation` -- see its docstring for
+    what it does and why it isn't on by default.
     """
     try:
         prep = build_schlegel_ts_preparation(
@@ -85,6 +90,7 @@ def find_ts(
             bond_scale=bond_scale, max_relax_steps=max_relax_steps, convergence=convergence,
             keep_trajectory=keep_trajectory,
             breaking_bonds=breaking_bonds, forming_bonds=forming_bonds,
+            use_exact_pre_relaxation_hessian=use_exact_pre_relaxation_hessian,
         )
     except CalculatorError as exc:
         # Already logged inside build_schlegel_ts_preparation -- just

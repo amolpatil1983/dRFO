@@ -74,6 +74,7 @@ def build_schlegel_ts_preparation(
     keep_trajectory: bool = False,
     breaking_bonds: list[tuple[int, int]] | None = None,
     forming_bonds: list[tuple[int, int]] | None = None,
+    use_exact_pre_relaxation_hessian: bool = False,
 ) -> TSPreparation:
     """Build everything `optimize.search.run_drfo_search` needs from a
     reactant/product pair, per the paper's CTS recipe: bond-order
@@ -87,6 +88,25 @@ def build_schlegel_ts_preparation(
     distance-cutoff diffing -- use this when a more reliable classification
     is already available (e.g. from an exact atom-mapping step run
     upstream). Both must be given together, or neither.
+
+    `use_exact_pre_relaxation_hessian` (default off): the Hessian eq. 12's
+    Rayleigh-flip is built from is normally the BFGS-accumulated Hessian
+    the constrained pre-relaxation happens to end up with -- an
+    approximation that has never taken a real step along most directions,
+    including whichever one the true reaction coordinate turns out to be.
+    Setting this computes one genuine numerical Hessian (Hartree/bohr^2,
+    ~2x a gradient call for xtb) at the relaxed geometry instead. The
+    paper's own Discussion section notes symmetric-starting-point failures
+    are worse "especially when exact Hessian information is not used",
+    which was the motivation for adding this -- tested directly on
+    butadiene -> cyclobutene (a known symmetric-start failure) and found
+    NOT to resolve it by itself (the relaxed geometry is still fairly
+    reactant-like; its local curvature apparently doesn't yet carry the
+    true rotational reaction coordinate as a negative eigenvalue that far
+    from the actual TS). Kept as a general robustness option -- exact
+    curvature is strictly more informative than a BFGS approximation that
+    hasn't explored much of the space yet -- not as a fix for any specific
+    known failure.
 
     Raises `CalculatorError` (already logged) on any calculator failure
     during guess-building or pre-relaxation -- this function either returns
@@ -137,6 +157,13 @@ def build_schlegel_ts_preparation(
         log_calculator_error("calculator failure during constrained pre-relaxation", exc)
         raise
     relaxed_geom, H_cart_tilde = relax_result.geometry, relax_result.hessian
+
+    if use_exact_pre_relaxation_hessian:
+        try:
+            H_cart_tilde = calculator.hessian(relaxed_geom)
+        except CalculatorError as exc:
+            log_calculator_error("calculator failure computing exact pre-relaxation Hessian", exc)
+            raise
 
     if keep_trajectory:
         trajectory.append(relaxed_geom.copy())

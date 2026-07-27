@@ -204,6 +204,24 @@ def test_hcn_hnc_with_periodic_hessian_refresh(tmp_path):
     assert result.n_imaginary == 1
 
 
+def test_hcn_hnc_with_exact_pre_relaxation_hessian(tmp_path):
+    """Regression check for `use_exact_pre_relaxation_hessian`'s wiring
+    (see build_schlegel_ts_preparation's docstring for why it isn't on by
+    default -- tested directly on butadiene -> cyclobutene and found not
+    to resolve that specific failure by itself -- but the option itself
+    must still work correctly when used)."""
+    hcn = read_xyz(STRUCTURES_DIR / "hcn.xyz")
+    hnc = read_xyz(STRUCTURES_DIR / "hnc.xyz")
+    calc = XTBCalculator(XTB_PATH, method="gfn2", scratch_dir=tmp_path)
+
+    result = find_ts(hcn, hnc, calculator=calc, max_relax_steps=80, max_ts_steps=80,
+                      use_exact_pre_relaxation_hessian=True)
+
+    assert result.status == "converged"
+    assert result.converged
+    assert result.n_imaginary == 1
+
+
 def test_hcn_hnc_forward_and_reverse_agree_on_ts_energy(tmp_path):
     """Path-symmetry check: the TS found from HCN->HNC and from HNC->HCN
     must be the same physical stationary point, hence the same energy."""
